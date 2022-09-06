@@ -6,7 +6,7 @@ CFLAGS=-std=gnu99 -Wall
 ifdef DEBUG
 CFLAGS+= -g
 else
-CFLAGS+= -Os
+CFLAGS+= -O2
 endif
 
 MDNS_REPEATER_VERSION=$(shell git rev-parse HEAD )

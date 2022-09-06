@@ -44,7 +44,7 @@ const char package_name[] = PACKAGE;
 #define MDNS_ADDR "224.0.0.251"
 #define MDNS_PORT 5353
 
-#define PIDFILE "/var/run/" PACKAGE ".pid"
+#define PIDFILE "/var/run/" PACKAGE "/" PACKAGE ".pid"
 
 #define MAX_SOCKS 16
 #define MAX_SUBNETS 16
@@ -386,8 +386,10 @@ static int create_recv_sock() {
 		log_message(LOG_ERR, "recv bind(): %s", strerror(errno));
 	}
 
+	u_char on_uchar = 1;
+
 	// enable loopback in case someone else needs the data
-	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &on, sizeof(on))) < 0) {
+	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &on_uchar, sizeof(on_uchar))) < 0) {
 		log_message(LOG_ERR, "recv setsockopt(IP_MULTICAST_LOOP): %s", strerror(errno));
 		return r;
 	}
@@ -471,9 +473,22 @@ static int create_send_sock(int recv_sockfd, const char *ifname, struct if_sock 
 		return r;
 	}
 
+
 	// enable loopback in case someone else needs the data
-	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &on, sizeof(on))) < 0) {
+	u_char on_uchar = 1;
+	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &on_uchar, sizeof(on_uchar))) < 0) {
 		log_message(LOG_ERR, "send setsockopt(IP_MULTICAST_LOOP): %s", strerror(errno));
+		return r;
+	}
+
+	u_char ttl = 1;
+	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl))) < 0) {
+		log_message(LOG_ERR, "send setsockopt(IP_MULTICAST_TTL): %m");
+		return r;
+	}
+
+	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_IF, &if_addr->s_addr, sizeof(if_addr->s_addr))) < 0) {
+		log_message(LOG_ERR, "send setsockopt(IP_MULTICAST_IF): %m");
 		return r;
 	}
 
@@ -800,6 +815,13 @@ int main(int argc, char *argv[]) {
 			goto end_main;
 		}
 		num_socks++;
+	}
+
+	// drop permissions
+	if (pledge("stdio cpath rpath inet", NULL) == -1) {
+		log_message(LOG_ERR, "cannot pledge()");
+		r = 1;
+		goto end_main;
 	}
 
 	pkt_data = malloc(PACKET_SIZE);
